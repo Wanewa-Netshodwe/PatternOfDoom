@@ -72,7 +72,7 @@ pub struct CurrentPlayer{
 
 
 pub async  fn create_user_account(user_details: UserAccout) {
-    // Construct a BSON document using the `doc!` macro
+ 
     let doc = doc! {
         "num_attempts":"0",
         "name": &user_details.name,
@@ -178,7 +178,6 @@ pub fn get_all_usernames(docs: &Vec<Document>) -> Vec<String> {
 }
 
 
-// Helper function to convert values to Bson
 fn to_bson<T>(value: &T) -> Bson
 where
     T: Serialize,
@@ -195,7 +194,7 @@ pub enum DifficultyLevel{
 async fn save_document(collection: &Result<Collection<Document>, mongodb::error::Error>, doc: &Document) {
     match collection {
         Ok(col) => {
-            // Insert the document asynchronously
+            
             if let Err(error) = col.insert_one(doc, None).await {
                 eprintln!("Error inserting document: {}", error);
             } else {

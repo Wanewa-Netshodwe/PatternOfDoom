@@ -143,9 +143,7 @@ fn spinner_indicator(loading_completed: Arc<AtomicBool>, message: String) -> Joi
     })
 }
 
-/// This function handles account creation. If the user enters "#" when prompted for
-/// a password (to continue an existing account), the function returns early and control
-/// goes back to the login menu.
+
 async fn handle_account_creation(
     usernames: &Vec<String>,
     users: &Vec<Document>,
@@ -154,7 +152,6 @@ async fn handle_account_creation(
     let mut username = String::new();
     let mut password = String::new();
 
-    // Get a unique username
     loop {
         print!("\nEnter User Name: ");
         io::stdout().flush().unwrap();
@@ -168,7 +165,6 @@ async fn handle_account_creation(
         println!("Username '{}' is already taken. Please try another one.", username.trim());
     }
 
-    // Get initial password (this might be used for account creation)
     print!("\nEnter Password: ");
     io::stdout().flush().unwrap();
     password.clear();
@@ -180,7 +176,6 @@ async fn handle_account_creation(
     let user_doc = database::users::find_user(&users, &username, ip_address);
 
     match user_doc {
-        // No account exists for this username and IP address; create a new account.
         None => {
             let account_creation = Arc::new(AtomicBool::new(false));
             let ac = account_creation.clone();
@@ -191,9 +186,9 @@ async fn handle_account_creation(
             join_handle.join().unwrap();
             println!("Account Created");
             
-            // Insert new account creation logic here.
+           
         }
-        // An account was found.
+    
         Some(data) => {
             println!("Account found for {}.", data);
             println!("Enter Password to continue or enter '#' to go back to the main menu: ");
@@ -205,7 +200,7 @@ async fn handle_account_creation(
 
             if password.trim() == "#" {
                 println!("Returning to the login menu...");
-                return; // Early return takes you back to the login menu.
+                return; 
             } else {
                 match database::users::login(&users, &data.trim().to_string(), &password.trim().to_string()) {
                     Ok(_) => {
@@ -357,13 +352,11 @@ async fn main() {
 
         match login_menu_option.trim().parse::<u8>() {
             Ok(1) => {
-                // Placeholder for the login functionality.
-                // You can add your login code here.
+             
                 println!("Login functionality not yet implemented.");
             }
             Ok(2) => {
-                // Call the account creation function. If the user enters '#' during the process,
-                // they will be returned to this login menu.
+            
                 handle_account_creation(&usernames, &users, &ip_address).await;
             }
             _ => {
@@ -372,15 +365,12 @@ async fn main() {
             }
         }
 
-        // Optional: if you want to exit the login loop after a successful login,
-        // you can break here. Otherwise, the loop continues.
-        // For example, if logged in:
         if logged_in {
             break;
         }
     }
 
-    // Wait for user input to quit the program.
+  
     let mut quit = String::new();
     io::stdout().flush().unwrap();
     io::stdin()
