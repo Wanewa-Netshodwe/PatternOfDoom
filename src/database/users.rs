@@ -4,7 +4,8 @@ use mongodb::{
     Collection,
 };
 use serde::{Deserialize, Serialize};
-use std::fmt::{write, Display};
+use std::{collections::HashMap, fmt::{write, Display}};
+
 
 pub enum LoginError {
     Message(String),
@@ -17,7 +18,7 @@ impl Display for LoginError {
     }
 }
 
-use super::get_connection;
+use super::{cache, get_connection};
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct UserAccout {
     pub name: String,
@@ -65,7 +66,7 @@ pub struct PatternInfo {
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Pattern {
     pub general_rule: String,
-    pub pattern: Vec<u32>,
+    pub pattern: Vec<i32>,
     pub level: String,
     pub time_taken: i32,
     pub term_to_solve: i32,
@@ -105,13 +106,31 @@ pub async fn create_user_account(user_details: UserAccout) {
     save_document(&Ok(collection.unwrap()), &doc).await;
 }
 pub async fn update_user_account(user_details: UserAccout) {
-    let mut collection: Option<Collection<Document>> = Option::None;
-    if let Ok(data) = super::get_connection().await {
-        collection = Some(data.0);
+    let filter = doc! { "ip_address": &user_details.ip_address };
+    let update = doc! {
+        "$set": {
+            "file_path": &user_details.file_path,
+            "incomplete_pattern":to_bson(&user_details.incomplete_pattern),
+            "num_attempts": &user_details.num_attempts,
+            "rank": &user_details.rank,
+            "patterns_solved": to_bson(&user_details.patterns_solved)
+        }
+    };
+   
+   let cache = cache::GLOBAL_CACHE.lock().await;
+   if !cache.is_empty(){
+    let collection = cache.get_collection();
+    if let Some(col) =collection{
+     let res = col.update_one(filter, update, None).await;
+     match res {
+         Ok(_)=>{ println!("Successfully updated the document.");},
+         Err(_)=>{println!("No matching document found.");}
+     }
     }
-    if let Some(col) = collection {
-        update_user_document(&col, &user_details).await;
-    }
+   }else {
+       println!("cache is empty cant save ")
+   }
+     
 }
 
 fn formatter(value: &str, user: &Document) -> String {

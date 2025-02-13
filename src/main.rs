@@ -20,13 +20,13 @@ use std::time::Duration;
 use sysinfo::{Disk, Disks};
 use tokio::sync::mpsc::{channel, Sender};
 
-fn generate_sequence(level: &DifficultyLevel) -> (Vec<u32>, String) {
+fn generate_sequence(level: &DifficultyLevel) -> (Vec<i32>, String) {
     let mut rng = rand::thread_rng();
 
     match level {
         DifficultyLevel::Easy => {
-            let mut pattern: Vec<u32> = Vec::new();
-            let n: u32 = rng.gen_range(2..9);
+            let mut pattern: Vec<i32> = Vec::new();
+            let n: i32 = rng.gen_range(2..3);
             let operand_num = rng.gen_range(1..4);
             let operand_string = match operand_num {
                 1 => "+",
@@ -34,12 +34,12 @@ fn generate_sequence(level: &DifficultyLevel) -> (Vec<u32>, String) {
                 3 => "*",
                 _ => panic!("Unexpected number"),
             };
-            let complementary_num = rng.gen_range(1..15);
+            let complementary_num = rng.gen_range(1..10);
 
-            for num in 1..=5 {
+            for num in 1..5 {
                 match operand_string {
-                    "+" => pattern.push((n * num + complementary_num as u32)),
-                    "-" => pattern.push((n * num - complementary_num as u32)),
+                    "+" => pattern.push((n * num + complementary_num as i32)),
+                    "-" => pattern.push((n * num - complementary_num as i32)),
                     "*" => pattern.push((n * num * complementary_num)),
                     _ => unreachable!(),
                 }
@@ -220,12 +220,11 @@ async fn account_login(
         shared_account_ref_lock.incomplete_pattern.time_taken,
     ));
     let seconds_clone = Arc::clone(&seconds);
-    let second_ref = Arc::new(seconds_clone);
+    let second_ref = Arc::new(&seconds_clone);
 
     let path = Path::new(r"C:\Temp\test\file.txt");
     if shared_account_ref_lock.file_path.len() < 2 {
         shared_account_ref_lock.file_path = path.to_str().unwrap().to_string();
-        update_user_account(shared_account_ref_lock.clone()).await;
     }
     drop(shared_account_ref_lock);
     let lock2 = shared_account_ref.lock().unwrap();
@@ -330,9 +329,11 @@ async fn account_login(
                     hint = None;
 
                     if lock.incomplete_pattern.solved {
+                        let counter_flag = Arc::new(AtomicBool::new(false));
+                        counter(seconds_clone.clone(), counter_flag);
                         let mut rng = rand::thread_rng();
                         let term_to_solve = rng.gen_range(6..12);
-                        let seq: (Vec<u32>, String) = generate_sequence(&DifficultyLevel::Easy);
+                        let seq: (Vec<i32>, String) = generate_sequence(&DifficultyLevel::Easy);
                         let seq_creation = Arc::new(AtomicBool::new(false));
                         let sc = seq_creation.clone();
                         lock.incomplete_pattern.pattern = seq.0;
@@ -426,9 +427,9 @@ async fn account_login(
                             jeopardy_clone = jeopardy;
                         }
                         lock.incomplete_pattern.jeopardy = jeopardy_clone;
-                        lock.incomplete_pattern.time_taken = second_ref.load(Ordering::SeqCst);
                     }
                 }
+                lock.incomplete_pattern.time_taken = second_ref.load(Ordering::SeqCst);
 
                 let _ = tx.send(Some(lock.clone())).await;
 
