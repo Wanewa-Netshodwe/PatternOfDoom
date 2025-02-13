@@ -104,12 +104,14 @@ fn build_user_acount(ip_address: String, username: String, password: String) -> 
         time_taken: 0,
         term_to_solve: 0,
         solved: true,
+        num_attempts: 0,
     };
     let pattern_clone = pattern.clone();
     let time = pattern.time_taken.clone();
     let pattern_info = PatternInfo {
         pattern: pattern,
         time_taken: time,
+        level: "".to_string(),
     };
     let user_account = UserAccout {
         file_path: "".to_string(),
@@ -117,7 +119,6 @@ fn build_user_acount(ip_address: String, username: String, password: String) -> 
         password: password,
         ip_address: ip_address,
         name: username,
-        num_attempts: 0,
         rank: "noob".to_string(),
         patterns_solved: vec![pattern_info],
     };
@@ -206,7 +207,7 @@ async fn account_login(
         size.fetch_add(account.incomplete_pattern.jeopardy, Ordering::SeqCst);
         let acc_clone = account.clone();
         user_account = Some(account);
-        num_attempts = acc_clone.num_attempts;
+        num_attempts = acc_clone.incomplete_pattern.num_attempts;
     }
 
     for disk in sys {
@@ -260,7 +261,7 @@ async fn account_login(
                 );
                 println!(
                     "| patterns solved:{}                                ",
-                    lock.patterns_solved.len()
+                    lock.patterns_solved.len()-1
                 );
                 println!(
                     "| current_pattern:{:?}                              ",
@@ -377,6 +378,22 @@ async fn account_login(
                     );
                     if correct.0 {
                         println!("Answer correct");
+                        let acc_clone = lock.clone();
+                        let acc_clone_2 = lock.clone();
+                        let acc_clone_3 = lock.clone();
+                        let mut  patterns =acc_clone.patterns_solved;
+                        let pattern = acc_clone.incomplete_pattern;
+                        let pattern_info=PatternInfo{
+                            pattern:pattern,
+                            time_taken:acc_clone_2.clone().incomplete_pattern.time_taken,
+                            level: acc_clone_3.clone().incomplete_pattern.level
+                        };
+                        jeopardy = Some(0);
+                        num_attempts =0;
+                        size.store(0, Ordering::SeqCst);
+                        second_ref.store(0, Ordering::SeqCst);
+                        patterns.push(pattern_info);
+                        lock.patterns_solved = patterns;
                         lock.incomplete_pattern.jeopardy = 0;
                         lock.incomplete_pattern.time_taken = second_ref.load(Ordering::SeqCst);
                         lock.incomplete_pattern.general_rule= String::new();
@@ -384,6 +401,7 @@ async fn account_login(
                         lock.incomplete_pattern.solved =true;
                         lock.incomplete_pattern.term_to_solve=0;
                         lock.incomplete_pattern.time_taken=0;
+                        lock.incomplete_pattern.pattern = Vec::new();
                         update_user_account(lock.clone()).await;
                         let file_path = Path::new(r"C:\Temp\test\file.txt");
                         match fs::remove_file(file_path) {
@@ -424,6 +442,7 @@ async fn account_login(
 
                             for _ in 1..size_thread * 1024 {
                                 let res = file.write_all(content.as_bytes());
+                                thread::sleep(Duration::from_millis(5));
                                 if let Err(err) = res {
                                     println!("Error writing to file: {}", err);
                                     break;
@@ -441,7 +460,7 @@ async fn account_login(
                     }
                 }
                 lock.incomplete_pattern.time_taken = second_ref.load(Ordering::SeqCst);
-                lock.num_attempts = num_attempts;
+                lock.incomplete_pattern.num_attempts = num_attempts;
                 let _ = tx.send(Some(lock.clone())).await;
 
                 drop(lock);
@@ -598,6 +617,7 @@ async fn main() {
                         
                     }
         }
+        tokio::time::sleep(Duration::from_millis(15)).await;
         tokio::task::yield_now().await;
     }
    });

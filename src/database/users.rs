@@ -28,7 +28,6 @@ pub struct UserAccout {
     pub file_path: String,
     pub patterns_solved: Vec<PatternInfo>,
     pub incomplete_pattern: Pattern,
-    pub num_attempts: i32,
 }
 
 impl Display for UserAccout {
@@ -61,6 +60,7 @@ impl Display for PatternInfo {
 pub struct PatternInfo {
     pub pattern: Pattern,
     pub time_taken: i32,
+    pub level: String,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -72,6 +72,7 @@ pub struct Pattern {
     pub term_to_solve: i32,
     pub solved: bool,
     pub jeopardy: i32,
+    pub num_attempts: i32,
 }
 
 pub struct CurrentPlayer {
@@ -86,8 +87,6 @@ pub enum DifficultyLevel {
 
 pub async fn create_user_account(user_details: UserAccout) {
     let doc = doc! {
-        "num_attempts":0,
-        "solved":false,
         "name": &user_details.name,
         "ip_address": &user_details.ip_address,
         "rank": &user_details.rank,
@@ -98,12 +97,11 @@ pub async fn create_user_account(user_details: UserAccout) {
        
 
     };
-    let mut collection: Option<Collection<Document>> = Option::None;
-    if let Ok(data) = super::get_connection().await {
-        collection = Some(data.0);
-    }
-
-    save_document(&Ok(collection.unwrap()), &doc).await;
+    let cache = cache::GLOBAL_CACHE.lock().await;
+    let col = cache.get_collection().unwrap();
+    save_document(&Ok(col), &doc).await;
+    
+   
 }
 pub async fn update_user_account(user_details: UserAccout) {
     let filter = doc! { "ip_address": &user_details.ip_address };
@@ -114,7 +112,6 @@ pub async fn update_user_account(user_details: UserAccout) {
             "incomplete_pattern":to_bson(&user_details.incomplete_pattern),
             "rank": &user_details.rank,
             "patterns_solved": to_bson(&user_details.patterns_solved),
-            "num_attempts": &user_details.num_attempts,
         }
     };
    
@@ -183,7 +180,6 @@ pub fn find_logged_in_user(users: &Vec<Document>, ip_address: &String) -> Option
             .to_string();
         if doc_ip_adress.eq(ip_address) {
             let mut user_account = UserAccout {
-                num_attempts:user.get("num_attempts").unwrap().as_i32().unwrap(),
                 password: formatter("password", user),
                 file_path: formatter("file_path", user),
                 incomplete_pattern: match user.get("incomplete_pattern") {
@@ -266,7 +262,7 @@ where
 }
 
 async fn save_document(
-    collection: &Result<Collection<Document>, mongodb::error::Error>,
+    collection: &Result<&Collection<Document>, mongodb::error::Error>,
     doc: &Document,
 ) {
     match collection {
@@ -293,7 +289,6 @@ pub async fn update_user_document(
         "$set": {
             "file_path": &user_account.file_path,
             "incomplete_pattern":to_bson(&user_account.incomplete_pattern),
-            "num_attempts": &user_account.num_attempts,
             "rank": &user_account.rank,
             "patterns_solved": to_bson(&user_account.patterns_solved)
         }
