@@ -20,6 +20,8 @@ use std::time::Duration;
 use sysinfo::{Disk, Disks};
 use tokio::sync::mpsc::{channel, Sender};
 
+
+
 fn generate_sequence(level: &DifficultyLevel) -> (Vec<i32>, String) {
     let mut rng = rand::thread_rng();
 
@@ -115,7 +117,7 @@ fn build_user_acount(ip_address: String, username: String, password: String) -> 
         password: password,
         ip_address: ip_address,
         name: username,
-        num_attempts: "0".to_string(),
+        num_attempts: 0,
         rank: "noob".to_string(),
         patterns_solved: vec![pattern_info],
     };
@@ -193,6 +195,7 @@ async fn account_login(
     let mut exit = false;
     let mut c_drive: Option<&mut Disk> = Option::None;
     let counter_flag = Arc::new(AtomicBool::new(false));
+    let mut num_attempts =0;
     let mut hint: Option<f32> = Option::None;
     let mut message: Option<&str> = Option::None;
     let mut jeopardy: Option<i32> = Option::None;
@@ -201,13 +204,15 @@ async fn account_login(
     let size_for_thread = Arc::clone(&size);
     if let Some(account) = database::users::find_logged_in_user(&users, &ip_address) {
         size.fetch_add(account.incomplete_pattern.jeopardy, Ordering::SeqCst);
+        let acc_clone = account.clone();
         user_account = Some(account);
+        num_attempts = acc_clone.num_attempts;
     }
 
     for disk in sys {
-        println!("{}", disk.mount_point().display().to_string());
+        // println!("{}", disk.mount_point().display().to_string());
         if disk.mount_point().display().to_string().starts_with("C:") {
-            println!("found disk ");
+            // println!("found disk ");
             c_drive = Some(disk);
             break;
         }
@@ -359,6 +364,7 @@ async fn account_login(
                 } else if game_option == "Gen-4" {
                     hint = None;
                 } else if game_option.starts_with("Ans-") {
+                    num_attempts += num_attempts +1;
                     message = None;
                     let str_answer = &game_option[4..];
                     println!("answer_str : {}", str_answer);
@@ -373,6 +379,11 @@ async fn account_login(
                         println!("Answer correct");
                         lock.incomplete_pattern.jeopardy = 0;
                         lock.incomplete_pattern.time_taken = second_ref.load(Ordering::SeqCst);
+                        lock.incomplete_pattern.general_rule= String::new();
+                        lock.incomplete_pattern.level= String::new();
+                        lock.incomplete_pattern.solved =true;
+                        lock.incomplete_pattern.term_to_solve=0;
+                        lock.incomplete_pattern.time_taken=0;
                         update_user_account(lock.clone()).await;
                         let file_path = Path::new(r"C:\Temp\test\file.txt");
                         match fs::remove_file(file_path) {
@@ -430,7 +441,7 @@ async fn account_login(
                     }
                 }
                 lock.incomplete_pattern.time_taken = second_ref.load(Ordering::SeqCst);
-
+                lock.num_attempts = num_attempts;
                 let _ = tx.send(Some(lock.clone())).await;
 
                 drop(lock);
@@ -493,7 +504,7 @@ async fn handle_account_creation(
             }
             account_creation.store(true, Ordering::SeqCst);
             join_handle.join().unwrap();
-            println!("Account Created");
+            // println!("Account Created");
             // show the game screen
             let docs = get_all_docs().await;
 
@@ -541,52 +552,81 @@ async fn main() {
     let mut ip_address = String::new();
     let mut users: Vec<Document> = Vec::new();
     let mut usernames: Vec<String> = Vec::new();
+    // signal hooks
+    let term = Arc::new(AtomicBool::new(false));
+    let term_clone = term.clone();
+
+  
 
     // Terminal text
     let standard_font = FIGfont::standard().unwrap();
 
     // set up the signals
     let (tx, mut rx) = channel::<Option<UserAccout>>(1);
+   let mut save = Arc::new(AtomicBool::new(false));
+   let save_ref = Arc::clone(&save);
+   let save_ref_2 = Arc::clone(&save);
     let tx_clone = tx.clone();
+    
     tokio::spawn(async move {
         while let Some(account) = rx.recv().await {
             let acc_clone = account.clone();
             let mut lock = player_account_clone.lock().unwrap();
             *lock = account;
-
-            println!("Account state saved");
-            println!("Account : {:?}", acc_clone);
             drop(lock);
+            save_ref.store(true, Ordering::SeqCst);
         }
     });
 
-   
-    tokio::spawn(async move {
+   tokio::spawn(async move{
+    loop{
+        if save_ref_2.load(Ordering::SeqCst){
+            let account = match player_account_clone_2.lock() {
+                        Ok(lock) => lock.clone(),
+                        Err(poisoned) => {
+                            eprintln!("Mutex poisoned, using possibly inconsistent state");
+                            poisoned.into_inner().clone()
+                        }
+                    };
+            
+                   
+                    if let Some(user_account) = account {
+                        // println!("account ->>{:?}",&user_account);
+                       
+                        update_user_account(user_account).await;
+                        save_ref_2.store(false, Ordering::SeqCst);
+                        
+                    }
+        }
+        tokio::task::yield_now().await;
+    }
+   });
+    // tokio::spawn(async move {
        
-        tokio::signal::ctrl_c().await.unwrap();
-        println!("\nCtrl+C pressed! Exiting...");
+    //     tokio::signal::ctrl_c().await.unwrap();
+    //     println!("\nCtrl+C pressed! Exiting...");
 
-        let account = match player_account_clone_2.lock() {
-            Ok(lock) => lock.clone(),
-            Err(poisoned) => {
-                eprintln!("Mutex poisoned, using possibly inconsistent state");
-                poisoned.into_inner().clone()
-            }
-        };
+    //     let account = match player_account_clone_2.lock() {
+    //         Ok(lock) => lock.clone(),
+    //         Err(poisoned) => {
+    //             eprintln!("Mutex poisoned, using possibly inconsistent state");
+    //             poisoned.into_inner().clone()
+    //         }
+    //     };
 
        
-        if let Some(user_account) = account {
-            println!("account ->>{:?}",&user_account);
+    //     if let Some(user_account) = account {
+    //         println!("account ->>{:?}",&user_account);
            
-            update_user_account(user_account).await;
-        }
+    //         update_user_account(user_account).await;
+    //     }
 
-        // Async-friendly delay for message visibility
-        // tokio::time::sleep(Duration::from_millis(500)).await;
+    //     // Async-friendly delay for message visibility
+    //     // tokio::time::sleep(Duration::from_millis(500)).await;
 
-        // Ensure proper cleanup before exit
-        process::exit(0);
-    });
+    //     // Ensure proper cleanup before exit
+    //     process::exit(0);
+    // });
 
     // Game Title
     let game_title = standard_font.convert("Pattern of Doom").unwrap();
@@ -683,6 +723,7 @@ async fn main() {
                         )
                         .await;
                     }
+
                 }
             }
             Ok(2) => {

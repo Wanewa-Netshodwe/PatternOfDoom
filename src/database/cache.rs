@@ -28,5 +28,4 @@ impl Cache {
     }
 }
 
-// Global cache instance
 pub static GLOBAL_CACHE: Lazy<Mutex<Cache>> = Lazy::new(|| Mutex::new(Cache::new()));

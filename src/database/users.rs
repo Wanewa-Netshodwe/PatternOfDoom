@@ -28,7 +28,7 @@ pub struct UserAccout {
     pub file_path: String,
     pub patterns_solved: Vec<PatternInfo>,
     pub incomplete_pattern: Pattern,
-    pub num_attempts: String,
+    pub num_attempts: i32,
 }
 
 impl Display for UserAccout {
@@ -86,7 +86,7 @@ pub enum DifficultyLevel {
 
 pub async fn create_user_account(user_details: UserAccout) {
     let doc = doc! {
-        "num_attempts":"0",
+        "num_attempts":0,
         "solved":false,
         "name": &user_details.name,
         "ip_address": &user_details.ip_address,
@@ -95,7 +95,7 @@ pub async fn create_user_account(user_details: UserAccout) {
         "incomplete_pattern": to_bson(&user_details.incomplete_pattern),
         "patterns_solved": to_bson(&user_details.patterns_solved),
         "password": &user_details.password,
-        "jeopardy":&user_details.incomplete_pattern.jeopardy
+       
 
     };
     let mut collection: Option<Collection<Document>> = Option::None;
@@ -107,13 +107,14 @@ pub async fn create_user_account(user_details: UserAccout) {
 }
 pub async fn update_user_account(user_details: UserAccout) {
     let filter = doc! { "ip_address": &user_details.ip_address };
+    
     let update = doc! {
         "$set": {
             "file_path": &user_details.file_path,
             "incomplete_pattern":to_bson(&user_details.incomplete_pattern),
-            "num_attempts": &user_details.num_attempts,
             "rank": &user_details.rank,
-            "patterns_solved": to_bson(&user_details.patterns_solved)
+            "patterns_solved": to_bson(&user_details.patterns_solved),
+            "num_attempts": &user_details.num_attempts,
         }
     };
    
@@ -123,7 +124,10 @@ pub async fn update_user_account(user_details: UserAccout) {
     if let Some(col) =collection{
      let res = col.update_one(filter, update, None).await;
      match res {
-         Ok(_)=>{ println!("Successfully updated the document.");},
+         Ok(_)=>{
+            //  println!("Successfully updated the document.");
+            // println!(".");
+            },
          Err(_)=>{println!("No matching document found.");}
      }
     }
@@ -179,7 +183,7 @@ pub fn find_logged_in_user(users: &Vec<Document>, ip_address: &String) -> Option
             .to_string();
         if doc_ip_adress.eq(ip_address) {
             let mut user_account = UserAccout {
-                num_attempts: formatter("num_attempts", user),
+                num_attempts:user.get("num_attempts").unwrap().as_i32().unwrap(),
                 password: formatter("password", user),
                 file_path: formatter("file_path", user),
                 incomplete_pattern: match user.get("incomplete_pattern") {
@@ -223,12 +227,12 @@ pub fn login(
     password: &String,
 ) -> Result<bool, LoginError> {
     for user in users {
-        println!("comapring {} with {}", formatter("name", user), username);
-        println!(
-            "comapring {} password with {} password",
-            formatter("password", user),
-            password
-        );
+        // println!("comapring {} with {}", formatter("name", user), username);
+        // println!(
+        //     "comapring {} password with {} password",
+        //     formatter("password", user),
+        //     password
+        // );
         if formatter("name", user) == (*username) {
             if formatter("password", user) == (*password) {
                 return Ok(true);
